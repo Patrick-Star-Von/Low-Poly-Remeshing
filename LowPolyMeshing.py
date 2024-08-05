@@ -212,7 +212,7 @@ def in_triangle(A:mathutils.Vector, B:mathutils.Vector, C:mathutils.Vector, P:ma
         return False
     return True
 
-def min_dist_to_triangle(x, y, z, face)->float :
+def min_dist_to_triangle(x, y, z, face) :
     n = face.normal
     o = mathutils.Vector((x, y, z))
     d = mathutils.Vector((-n[0], -n[1], -n[2]))     # o + t * d  才是射线，这里法线取反比较方便                   
@@ -221,41 +221,51 @@ def min_dist_to_triangle(x, y, z, face)->float :
     p = o + t * d
 
     if in_triangle(face.verts[0].co, face.verts[1].co, face.verts[2].co, p) :
-        return (t * d).length, d, n, t
+        return (t * d).length, d, n, (t * d).length
     
     min_dist = sys.float_info.max
     temp_min_dist = 0
-    td = mathutils.Vector((0., 0., 0.))
+    _d = mathutils.Vector((0., 0., 0.))
+    middle_point = mathutils.Vector((0., 0., 0.))
     for v in face.verts :
+        middle_point += v.co
         temp_min_dist = (o - v.co).length
         if temp_min_dist < min_dist :
             min_dist = temp_min_dist
-            td = (v.co - o)
+            _d = (v.co - o)
 
-    return min_dist, td, n, t
+    middle_point /= 3
+
+    return min_dist, _d, n, (o - middle_point).length
 
 def get_UDF_isovalue(x, y, z, bmesh) :
     min_dist = sys.float_info.max
+    min_dist_to_tri = sys.float_info.max
     min_d = mathutils.Vector((0., 0., 0.))
     min_n = mathutils.Vector((0., 0., 0.))
     
     temp_min_dist = 0.
+    temp_min_dist_to_tri = 0.       # 还需要记录到三角形的距离，否则会出现某个三角形的点离网格点最近，但该三角形点不止存在于一个三角形内。该距离是网格点到三角形中心的距离
+    # 上述方法还存在缺陷，假设网格点离某三角形点最近，该三角形点由两个三角形共享，一个三角形太小，另一个三角形太大，结果网格点到达较小三角形的中点就更近，尽管因该离较大三角形较近
     n = mathutils.Vector((0., 0., 0.))
     d = mathutils.Vector((0., 0., 0.))
-    t = 0.
     
     for f in bmesh.faces :
-        temp_min_dist, d, n, t = min_dist_to_triangle(x, y, z, f)    # 除了返回最小距离，还返回方向向量d，用于计算符号
-        if temp_min_dist < min_dist :
-            min_dist = temp_min_dist
-            min_d = d
-            min_n = n
+        temp_min_dist, d, n, temp_min_dist_to_tri = min_dist_to_triangle(x, y, z, f)    # 除了返回最小距离，还返回方向向量d，用于计算符号
+        if temp_min_dist <= min_dist :
+            if temp_min_dist_to_tri < min_dist_to_tri :
+                min_dist = temp_min_dist
+                min_dist_to_tri = temp_min_dist_to_tri
+                min_d = d
+                min_n = n
     
     # 确定符号
-    if min_d.dot(min_n) > 0 :
-        return -min_dist
-    else :
-        return min_dist
+    # if min_d.dot(min_n) > 0 :
+    #     return -min_dist
+    # else :
+    #     return min_dist
+
+    return min_dist
 
 #-------------------------------------- Functionalities -------------------------------------#
 def discretize(self, context) :
